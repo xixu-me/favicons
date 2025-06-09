@@ -10,13 +10,3 @@ updates:
       - "dependencies"
       - "github-actions"
     open-pull-requests-limit: 10
-
-  # Keep Python dependencies up to date (for tzst)
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    labels:
-      - "dependencies"
-      - "python"
-    open-pull-requests-limit: 5
