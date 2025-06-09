@@ -1,0 +1,258 @@
+name: The Workflow
+
+on:
+  # Weekly trigger every Sunday at 02:00 UTC
+  schedule:
+    - cron: "0 2 * * 0"
+  # Manual trigger with configurable domain count
+  workflow_dispatch:
+    inputs:
+      domain_count:
+        description: "Number of top domains to process (supported values: 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000)"
+        required: false
+        default: "1000000"
+        type: string
+
+# Add permissions for the workflow
+permissions:
+  contents: write
+  actions: read
+
+env:
+  # Default domain count (can be overridden by workflow input)
+  DOMAIN_COUNT: ${{ github.event.inputs.domain_count || '1000000' }}
+
+jobs:
+  validate-input:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate domain count input
+        run: |
+          VALID_COUNTS="200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000"
+          if [[ ! " $VALID_COUNTS " =~ " ${{ env.DOMAIN_COUNT }} " ]]; then
+            echo "Error: Invalid domain count '${{ env.DOMAIN_COUNT }}'. Supported values: $VALID_COUNTS"
+            exit 1
+          fi
+          echo "Domain count validation passed: ${{ env.DOMAIN_COUNT }}"
+
+  fetch-domain-list:
+    runs-on: ubuntu-latest
+    needs: validate-input
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch top domains from Cloudflare Radar API
+        run: |
+          echo "Fetching top ${{ env.DOMAIN_COUNT }} domains from Cloudflare Radar API..."
+          curl "https://api.cloudflare.com/client/v4/radar/datasets/ranking_top_${{ env.DOMAIN_COUNT }}" \
+            --header "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            --output domains_raw.txt
+
+      - name: Process domain list
+        run: |
+          echo "Processing domain list - removing first line..."
+          # Remove the first line and save to domains file
+          tail -n +2 domains_raw.txt > domains
+          echo "Domain list processed. Total domains: $(wc -l < domains)"
+
+      - name: Upload domain list as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-list-artifact
+          path: domains
+          retention-days: 7
+
+  process-favicons-and-release:
+    runs-on: ubuntu-latest
+    needs: fetch-domain-list
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download domain list artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: domain-list-artifact
+          path: .
+
+      - name: Create favicons directory
+        run: |
+          mkdir -p favicons
+          echo "Created favicons directory"
+
+      - name: Download favicons for each domain
+        run: |
+          echo "Starting favicon download process..."
+          echo "Processing top ${{ env.DOMAIN_COUNT }} domains..."
+          total_domains=$(wc -l < domains)
+          echo "Total domains to process: $total_domains"
+
+          # Counter for progress tracking
+          counter=0
+          success_count=0
+          error_count=0
+
+          # Array to track used filenames for duplicate handling
+          declare -A filename_count
+
+          # Read domains file line by line
+          while IFS= read -r domain; do
+            counter=$((counter + 1))
+            
+            # Skip empty lines
+            if [ -z "$domain" ]; then
+              continue
+            fi
+            
+            # Progress indicator every 1000 domains
+            if [ $((counter % 1000)) -eq 0 ]; then
+              echo "Progress: $counter/$total_domains domains processed (Success: $success_count, Errors: $error_count)"
+            fi
+            
+            # Extract second-level domain (remove top-level domain)
+            # For example: google.com -> google, github.io -> github
+            second_level_domain=$(echo "$domain" | sed 's/\.[^.]*$//')
+            
+            # Handle duplicate filenames by adding sequential numbers
+            base_filename="$second_level_domain"
+            if [[ -n "${filename_count[$base_filename]}" ]]; then
+              # Increment count for this filename
+              filename_count[$base_filename]=$((filename_count[$base_filename] + 1))
+              final_filename="${base_filename}_${filename_count[$base_filename]}"
+            else
+              # First occurrence of this filename
+              filename_count[$base_filename]=0
+              final_filename="$base_filename"
+            fi
+            
+            # Construct favicon URL
+            favicon_url="https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256"
+            favicon_file="favicons/${final_filename}.png"
+            
+            # Download favicon with enhanced error handling and timeout
+            if timeout 15 curl -L -s -o "$favicon_file" "$favicon_url" --max-time 10 --retry 3 --retry-delay 1; then
+              # Check if file was actually downloaded and has content
+              if [ -s "$favicon_file" ]; then
+                # Calculate SHA-256 hash of the downloaded file
+                file_hash=$(sha256sum "$favicon_file" | cut -d' ' -f1)
+                
+                # Check if the hash matches the failure hash
+                if [ "$file_hash" = "59bfe9bc385ad69f50793ce4a53397316d7a875a7148a63c16df9b674c6cda64" ]; then
+                  # This is a failed download (generic/default favicon)
+                  rm -f "$favicon_file"
+                  error_count=$((error_count + 1))
+                  echo "Warning: Generic favicon detected for domain: $domain (mapped to $final_filename) (SHA-256: $file_hash)"
+                else
+                  # Valid favicon downloaded
+                  success_count=$((success_count + 1))
+                  echo "Success: Downloaded favicon for $domain -> $final_filename.png"
+                fi
+              else
+                # Remove empty file
+                rm -f "$favicon_file"
+                error_count=$((error_count + 1))
+                echo "Warning: Empty file for domain: $domain (mapped to $final_filename)"
+              fi
+            else
+              # Remove any partial file
+              rm -f "$favicon_file"
+              error_count=$((error_count + 1))
+              echo "Error: Failed to download favicon for domain: $domain (mapped to $final_filename)"
+            fi
+            
+            # Add high failure rate detection (stop if >80% failures after 100 domains)
+            if [ $counter -gt 100 ] && [ $((error_count * 100 / counter)) -gt 80 ]; then
+              echo "Error: High failure rate detected (${error_count}/${counter}). Stopping execution."
+              exit 1
+            fi
+          done < domains
+
+          echo "Favicon download completed!"
+          echo "Total processed: $counter"
+          echo "Successful downloads: $success_count"
+          echo "Failed downloads: $error_count"
+          echo "Success rate: $((success_count * 100 / counter))%"
+          echo "Downloaded favicons saved in: $(ls favicons | wc -l) files"
+
+      - name: Push favicons to branch
+        run: |
+          # Configure git
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Create or switch to assets branch
+          git checkout --orphan assets
+          git rm -rf . 2>/dev/null || true
+
+          # Copy favicons directory contents
+          cp -r favicons/* . 2>/dev/null || echo "No favicons to copy"
+
+          # Add all favicon files
+          git add *.png 2>/dev/null || echo "No PNG files to add"
+
+          # Commit with timestamp
+          if git diff --staged --quiet; then
+            echo "No favicon changes to commit"
+          else
+            git commit -m "Update favicons (top ${{ env.DOMAIN_COUNT }}) - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            git push origin assets --force
+          fi
+
+      - name: Install tzst compression tool
+        run: |
+          echo "Installing tzst compression tool..."
+          pip install tzst
+          tzst --version
+
+      - name: Create compressed archive
+        run: |
+          echo "Creating compressed favicon archive..."
+          # Create archive with tzst
+          tzst a archive.tzst favicons
+
+          # Verify archive was created
+          if [ -f "archive.tzst" ]; then
+            echo "Archive created successfully"
+            ls -lh archive.tzst
+          else
+            echo "Error: Archive creation failed"
+            exit 1
+          fi
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          # Generate tag based on current date and domain count
+          TAG="$(date -u '+%Y-%m-%d')-${{ env.DOMAIN_COUNT }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Generated release tag: $TAG"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Archive (Top ${{ env.DOMAIN_COUNT }}) - ${{ steps.tag.outputs.tag }}"
+          body: |
+            This release contains favicons for the top **${{ env.DOMAIN_COUNT }}** domains.
+
+            ## Contents
+            - **archive.tzst**: Compressed archive containing favicon images for top ${{ env.DOMAIN_COUNT }} domains
+
+            ## Usage
+            Extract the archive using the [tzst](https://github.com/xixu-me/tzst):
+            ```bash
+            pip install tzst
+            tzst x archive.tzst
+            ```
+
+            ## Note
+            This workflow is configurable! You can manually trigger it with different domain counts (200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, or 1000000) using the "Run workflow" button.
+          files: |
+            archive.tzst
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
