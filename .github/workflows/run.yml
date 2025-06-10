@@ -209,28 +209,6 @@ jobs:
             git push origin assets --force
           fi
 
-      - name: Purge jsDelivr CDN cache
-        run: |
-          echo "Purging jsDelivr CDN cache for assets branch..."
-          # Change to directory with PNG files
-          cd favicons
-
-          # Count files for progress tracking
-          total_files=$(find . -name "*.png" | wc -l)
-          echo "Purging cache for $total_files files"
-
-          count=0
-          for file in $(find . -name "*.png" -type f -printf "%f\n"); do
-            count=$((count + 1))
-            if [ $((count % 100)) -eq 0 ]; then
-              echo "Progress: Purged $count/$total_files files"
-            fi
-            
-            curl -s -o /dev/null -w "%{http_code}" "https://purge.jsdelivr.net/gh/${{ github.repository }}@assets/${file}"
-          done
-
-          echo "jsDelivr CDN cache purge completed for $count files"
-
       - name: Install tzst
         run: |
           echo "Installing tzst..."
