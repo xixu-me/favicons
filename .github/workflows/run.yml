@@ -103,8 +103,9 @@ jobs:
           success_count=0
           error_count=0
 
-          # Array to track used filenames for duplicate handling
-          declare -A filename_count
+          # Use associative arrays to track used filenames and next available index
+          declare -A filename_next_index
+          declare -A filename_used
 
           # Read domains file line by line
           while IFS= read -r domain; do
@@ -121,54 +122,66 @@ jobs:
             fi
             
             # Extract second-level domain (remove top-level domain)
-            # For example: google.com -> google, github.io -> github
             second_level_domain=$(echo "$domain" | sed 's/\.[^.]*$//')
             
-            # Handle duplicate filenames by adding sequential numbers
-            base_filename="$second_level_domain"
-            if [[ -n "${filename_count[$base_filename]}" ]]; then
-              # Increment count for this filename
-              filename_count[$base_filename]=$((filename_count[$base_filename] + 1))
-              final_filename="${base_filename}_${filename_count[$base_filename]}"
-            else
-              # First occurrence of this filename
-              filename_count[$base_filename]=0
-              final_filename="$base_filename"
+            # Initialize next index for this domain if not yet set
+            if [[ -z "${filename_next_index[$second_level_domain]}" ]]; then
+              filename_next_index[$second_level_domain]=0
             fi
             
             # Construct favicon URL
             favicon_url="https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256"
-            favicon_file="favicons/${final_filename}.png"
+            
+            # Temporarily use a temp file for download
+            temp_favicon_file="favicons/temp_favicon.png"
             
             # Download favicon with enhanced error handling and timeout
-            if timeout 15 curl -L -s -o "$favicon_file" "$favicon_url" --max-time 10 --retry 3 --retry-delay 1; then
+            if timeout 15 curl -L -s -o "$temp_favicon_file" "$favicon_url" --max-time 10 --retry 3 --retry-delay 1; then
               # Check if file was actually downloaded and has content
-              if [ -s "$favicon_file" ]; then
+              if [ -s "$temp_favicon_file" ]; then
                 # Calculate SHA-256 hash of the downloaded file
-                file_hash=$(sha256sum "$favicon_file" | cut -d' ' -f1)
+                file_hash=$(sha256sum "$temp_favicon_file" | cut -d' ' -f1)
                 
                 # Check if the hash matches the failure hash
                 if [ "$file_hash" = "59bfe9bc385ad69f50793ce4a53397316d7a875a7148a63c16df9b674c6cda64" ]; then
                   # This is a failed download (generic/default favicon)
-                  rm -f "$favicon_file"
+                  rm -f "$temp_favicon_file"
                   error_count=$((error_count + 1))
-                  echo "Warning: Generic favicon detected for domain: $domain (mapped to $final_filename) (SHA-256: $file_hash)"
+                  echo "Warning: Generic favicon detected for domain: $domain (SHA-256: $file_hash)"
                 else
+                  # Valid favicon downloaded - now assign the proper filename
+                  current_index=${filename_next_index[$second_level_domain]}
+                  
+                  # Determine the final filename
+                  if [ $current_index -eq 0 ]; then
+                    final_filename="$second_level_domain"
+                  else
+                    final_filename="${second_level_domain}_${current_index}"
+                  fi
+                  
+                  # Move the temp file to the final destination
+                  favicon_file="favicons/${final_filename}.png"
+                  mv "$temp_favicon_file" "$favicon_file"
+                  
+                  # Mark this filename as used and increment the next index
+                  filename_used["$final_filename"]=1
+                  filename_next_index[$second_level_domain]=$((current_index + 1))
+                  
                   # Valid favicon downloaded
                   success_count=$((success_count + 1))
                   echo "Success: Downloaded favicon for $domain -> $final_filename.png"
                 fi
               else
                 # Remove empty file
-                rm -f "$favicon_file"
+                rm -f "$temp_favicon_file"
                 error_count=$((error_count + 1))
-                echo "Warning: Empty file for domain: $domain (mapped to $final_filename)"
+                echo "Warning: Empty file for domain: $domain"
               fi
             else
               # Remove any partial file
-              rm -f "$favicon_file"
+              rm -f "$temp_favicon_file"
               error_count=$((error_count + 1))
-              echo "Error: Failed to download favicon for domain: $domain (mapped to $final_filename)"
+              echo "Error: Failed to download favicon for domain: $domain"
             fi
             
             # Add high failure rate detection (stop if >80% failures after 100 domains)
