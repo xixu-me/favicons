@@ -14,10 +14,10 @@ This repository hosts a collection of favicon images for the world's most popula
 
 ### Access Individual Favicons
 
-Individual favicons are stored in the `assets` branch and are named according to their second-level domain:
+Individual favicons are stored in the `assets` branch and are named according to their domain name:
 
-- `google.png` for google.com
-- `github.png` for github.com
+- `google.com.png` for google.com
+- `github.com.png` for github.com
 
 Access patterns:
 
@@ -114,15 +114,12 @@ You can modify the run.yml file to change:
 
 ### File Naming
 
-Favicons are named based on the second-level domain:
+Favicons are named using the domain name:
 
-- `example.com` → `example.png`
-- `subdomain.example.com` → `example.png`
+- `example.com` → `example.com.png`
+- `subdomain.example.com` → `subdomain.example.com.png`
 
-When duplicate second-level domains exist, sequential numbers are added:
-
-- First `github.io` domain → `github.png`
-- Second `github.io` domain → `github_1.png`
+This ensures unique filenames for all domains and preserves the complete domain information.
 
 ### Error Handling
 

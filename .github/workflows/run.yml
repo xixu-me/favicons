@@ -137,7 +137,7 @@ jobs:
                   error_count=$((error_count + 1))
                   echo "Warning: Generic favicon detected for domain: $domain (SHA-256: $file_hash)"
                 else
-                  # Valid favicon downloaded - use full domain as filename
+                  # Valid favicon downloaded - use domain as filename
                   favicon_file="favicons/${domain}.png"
                   mv "$temp_favicon_file" "$favicon_file"
                   
