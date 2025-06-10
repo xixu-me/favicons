@@ -209,9 +209,9 @@ jobs:
             git push origin assets --force
           fi
 
-      - name: Install tzst compression tool
+      - name: Install tzst
         run: |
-          echo "Installing tzst compression tool..."
+          echo "Installing tzst..."
           pip install tzst
           tzst --version
 
