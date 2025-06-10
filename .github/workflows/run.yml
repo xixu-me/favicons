@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       domain_count:
-        description: "Number of top domains to process (supported values: 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000)"
+        description: "Number of top domains to process (supported values: 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000)"
         required: false
-        default: "1000000"
+        default: "200000"
         type: string
 
 # Add permissions for the workflow
@@ -20,7 +20,7 @@ permissions:
 
 env:
   # Default domain count (can be overridden by workflow input)
-  DOMAIN_COUNT: ${{ github.event.inputs.domain_count || '1000000' }}
+  DOMAIN_COUNT: ${{ github.event.inputs.domain_count || '200000' }}
 
 jobs:
   validate-input:
@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Validate domain count input
         run: |
-          VALID_COUNTS="200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000"
+          VALID_COUNTS="200 500 1000 2000 5000 10000 20000 50000 100000 200000"
           if [[ ! " $VALID_COUNTS " =~ " ${{ env.DOMAIN_COUNT }} " ]]; then
             echo "Error: Invalid domain count '${{ env.DOMAIN_COUNT }}'. Supported values: $VALID_COUNTS"
             exit 1
@@ -249,7 +249,7 @@ jobs:
             ```
 
             ## Note
-            This workflow is configurable! You can manually trigger it with different domain counts (200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, or 1000000) using the "Run workflow" button.
+            This workflow is configurable! You can manually trigger it with different domain counts (200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, or 200000) using the "Run workflow" button.
           files: |
             archive.tzst
           draft: false
