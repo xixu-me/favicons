@@ -25,6 +25,12 @@ Access patterns:
 https://raw.githubusercontent.com/xixu-me/favicons/assets/DOMAIN_NAME.png
 ```
 
+For better performance and global availability, you can access the favicons through jsDelivr CDN:
+
+```
+https://cdn.jsdelivr.net/gh/xixu-me/favicons@assets/DOMAIN_NAME.png
+```
+
 ### Download Compressed Archives
 
 Pre-built archives are available in the [Releases](https://github.com/xixu-me/favicons/releases) section:
