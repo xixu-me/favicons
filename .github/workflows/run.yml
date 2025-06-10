@@ -157,12 +157,7 @@ jobs:
               error_count=$((error_count + 1))
               echo "Error: Failed to download favicon for domain: $domain"
             fi
-            
-            # Add high failure rate detection (stop if >80% failures after 100 domains)
-            if [ $counter -gt 100 ] && [ $((error_count * 100 / counter)) -gt 80 ]; then
-              echo "Error: High failure rate detected (${error_count}/${counter}). Stopping execution."
-              exit 1
-            fi
+
           done < domains
 
           echo "Favicon download completed!"
