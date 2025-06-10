@@ -46,7 +46,7 @@ tzst x archive.tzst
 
 Archives are available with the following domain counts:
 
-- 200 (minimal)
+- 200
 - 500
 - 1,000
 - 2,000
@@ -56,8 +56,6 @@ Archives are available with the following domain counts:
 - 50,000
 - 100,000
 - 200,000
-- 500,000
-- 1,000,000 (complete set)
 
 ## Self-Build Instructions
 
