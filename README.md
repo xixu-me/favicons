@@ -22,13 +22,13 @@ Individual favicons are stored in the `assets` branch and are named according to
 Access patterns:
 
 ```
-https://raw.githubusercontent.com/xixu-me/favicons/assets/DOMAIN_NAME.png
+https://raw.githubusercontent.com/xixu-me/favicons/refs/heads/assets/favicons/DOMAIN_NAME.png
 ```
 
 For better performance and global availability, you can access the favicons through jsDelivr CDN:
 
 ```
-https://cdn.jsdelivr.net/gh/xixu-me/favicons@assets/DOMAIN_NAME.png
+https://cdn.jsdelivr.net/gh/xixu-me/favicons@refs/heads/assets/favicons/DOMAIN_NAME.png
 ```
 
 ### Download Compressed Archives
