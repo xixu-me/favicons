@@ -63,7 +63,7 @@ jobs:
           echo "Domain list processed. Total domains: $(wc -l < domains)"
 
       - name: Upload domain list as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: domain-list-artifact
           path: domains
