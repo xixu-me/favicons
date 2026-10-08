@@ -3,7 +3,7 @@ name: The Workflow
 on:
   # Weekly trigger every Sunday at 02:00 UTC
   schedule:
-    - cron: "0 2 * * 0"
+    - cron: "7 2 * * 0"
   # Manual trigger with configurable domain count
   workflow_dispatch:
     inputs:
